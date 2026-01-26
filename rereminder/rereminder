@@ -1,0 +1,343 @@
+#!/usr/bin/env python3
+import argparse
+import datetime as dt
+import difflib
+import json
+import os
+from pathlib import Path
+import sqlite3
+import sys
+import urllib.parse
+
+APPLE_EPOCH = 978307200  # 2001-01-01T00:00:00Z
+
+
+def _normalize(text):
+    if text is None:
+        return ""
+    return " ".join(text.lower().split())
+
+
+def _token_ratio(a, b):
+    tokens_a = set(a.split())
+    tokens_b = set(b.split())
+    if not tokens_a or not tokens_b:
+        return 0.0
+    return len(tokens_a & tokens_b) / max(len(tokens_a), len(tokens_b))
+
+
+def _fuzzy_score(query, text):
+    if not text:
+        return 0.0
+    if query in text:
+        return 1.0
+    seq = difflib.SequenceMatcher(None, query, text).ratio()
+    token = _token_ratio(query, text)
+    return max(seq, token)
+
+
+def score_reminder(query, title, notes):
+    q = _normalize(query)
+    title_n = _normalize(title)
+    notes_n = _normalize(notes)
+    combined = " ".join(part for part in [title_n, notes_n] if part)
+    title_score = _fuzzy_score(q, title_n)
+    notes_score = _fuzzy_score(q, notes_n)
+    combined_score = _fuzzy_score(q, combined)
+    return max(title_score, notes_score * 0.9, combined_score * 0.95)
+
+
+def _to_unix_timestamp(value):
+    if value is None:
+        return None
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+    if v == 0:
+        return None
+    if v > 1e12:
+        # milliseconds since Unix epoch
+        return v / 1000.0
+    if v > 1e10:
+        # nanoseconds since Unix epoch
+        return v / 1_000_000_000.0
+    if v > 1e9:
+        # seconds since Unix epoch
+        return v
+    # seconds since Apple epoch (2001-01-01)
+    return v + APPLE_EPOCH
+
+
+def _format_timestamp(value, tzinfo):
+    unix_ts = _to_unix_timestamp(value)
+    if unix_ts is None:
+        return None
+    return dt.datetime.fromtimestamp(unix_ts, tz=tzinfo).isoformat()
+
+
+def _date_field(value, tzinfo):
+    return {
+        "raw": value,
+        "iso": _format_timestamp(value, tzinfo),
+    }
+
+
+def default_db_paths():
+    candidates = []
+    base = Path.home() / "Library/Group Containers/group.com.apple.reminders/Container_v1/Stores"
+    if base.exists():
+        candidates.extend(sorted(base.glob("Data-*.sqlite"), key=lambda p: p.stat().st_mtime, reverse=True))
+    legacy = Path.home() / "Library/Reminders"
+    if legacy.exists():
+        candidates.extend(sorted(legacy.glob("*.sqlite"), key=lambda p: p.stat().st_mtime, reverse=True))
+    return candidates
+
+
+def open_db(db_path):
+    encoded = urllib.parse.quote(str(db_path))
+    uri = f"file:{encoded}?mode=ro"
+    conn = sqlite3.connect(uri, uri=True)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA query_only = ON;")
+    return conn
+
+
+REMINDER_QUERY = """
+SELECT
+    r.Z_PK AS reminder_id,
+    r.ZTITLE AS title,
+    r.ZNOTES AS notes,
+    r.ZCREATIONDATE AS creation_date,
+    r.ZLASTMODIFIEDDATE AS last_modified_date,
+    r.ZDUEDATE AS due_date,
+    r.ZDISPLAYDATEDATE AS display_date,
+    r.ZSTARTDATE AS start_date,
+    r.ZCOMPLETIONDATE AS completion_date,
+    r.ZCOMPLETED AS completed,
+    r.ZPRIORITY AS priority,
+    r.ZFLAGGED AS flagged,
+    r.ZTIMEZONE AS timezone,
+    r.ZPARENTREMINDER AS parent_reminder_id,
+    r.ZLIST AS list_id,
+    l.ZNAME AS list_name
+FROM ZREMCDREMINDER r
+LEFT JOIN ZREMCDBASELIST l ON l.Z_PK = r.ZLIST
+WHERE r.ZMARKEDFORDELETION != 1
+"""
+
+LOCATION_QUERY = """
+SELECT
+    alarm.ZREMINDER AS reminder_id,
+    lt.ZTITLE AS title,
+    lt.ZLATITUDE AS latitude,
+    lt.ZLONGITUDE AS longitude,
+    lt.ZRADIUS AS radius,
+    lt.ZADDRESS AS address,
+    lt.ZLOCATIONUID AS location_uid,
+    lt.ZREFERENCEFRAMESTRING AS reference_frame,
+    lt.ZPROXIMITY AS proximity
+FROM ZREMCDOBJECT alarm
+JOIN ZREMCDOBJECT lt ON lt.Z_ENT = 18 AND lt.ZALARM = alarm.Z_PK
+WHERE alarm.Z_ENT = 15
+"""
+
+
+def load_locations(conn):
+    locations = {}
+    for row in conn.execute(LOCATION_QUERY):
+        reminder_id = row["reminder_id"]
+        payload = {
+            "title": row["title"],
+            "latitude": row["latitude"],
+            "longitude": row["longitude"],
+            "radius": row["radius"],
+            "address": row["address"],
+            "location_uid": row["location_uid"],
+            "reference_frame": row["reference_frame"],
+            "proximity": row["proximity"],
+        }
+        locations.setdefault(reminder_id, []).append(payload)
+    return locations
+
+
+def gather_reminders(conn, query, min_score):
+    tzinfo = dt.datetime.now().astimezone().tzinfo
+    locations = load_locations(conn)
+    results = []
+    for row in conn.execute(REMINDER_QUERY):
+        title = row["title"] or ""
+        notes = row["notes"] or ""
+        score = score_reminder(query, title, notes)
+        if score < min_score:
+            continue
+        reminder_id = row["reminder_id"]
+        reminder = {
+            "id": reminder_id,
+            "title": row["title"],
+            "notes": row["notes"],
+            "list": {
+                "id": row["list_id"],
+                "name": row["list_name"],
+            },
+            "created": _date_field(row["creation_date"], tzinfo),
+            "modified": _date_field(row["last_modified_date"], tzinfo),
+            "due": _date_field(row["due_date"], tzinfo),
+            "display": _date_field(row["display_date"], tzinfo),
+            "start": _date_field(row["start_date"], tzinfo),
+            "completed": {
+                "flag": row["completed"],
+                "date": _date_field(row["completion_date"], tzinfo),
+            },
+            "priority": row["priority"],
+            "flagged": row["flagged"],
+            "timezone": row["timezone"],
+            "parent_id": row["parent_reminder_id"],
+            "locations": locations.get(reminder_id, []),
+            "score": round(score, 4),
+        }
+        results.append(reminder)
+    results.sort(key=lambda r: r["score"], reverse=True)
+    return results
+
+
+def _render_text(reminder):
+    lines = []
+    score = reminder["score"]
+    lines.append(f"Score: {score:.2f}")
+    lines.append(f"Title: {reminder['title']}")
+    if reminder["list"]["name"]:
+        lines.append(f"List: {reminder['list']['name']}")
+    if reminder.get("notes"):
+        lines.append("Notes:")
+        for line in str(reminder["notes"]).splitlines():
+            lines.append(f"  {line}")
+    lines.append("Created: {}".format(_format_date_line(reminder["created"])))
+    lines.append("Modified: {}".format(_format_date_line(reminder["modified"])))
+    lines.append("Due: {}".format(_format_date_line(reminder["due"])))
+    lines.append("Display: {}".format(_format_date_line(reminder["display"])))
+    lines.append("Start: {}".format(_format_date_line(reminder["start"])))
+    completed_flag = reminder["completed"]["flag"]
+    completed_date = _format_date_line(reminder["completed"]["date"])
+    lines.append(f"Completed: {completed_flag} ({completed_date})")
+    lines.append(f"Priority: {reminder['priority']}")
+    lines.append(f"Flagged: {reminder['flagged']}")
+    if reminder.get("timezone"):
+        lines.append(f"Timezone: {reminder['timezone']}")
+    if reminder.get("parent_id"):
+        lines.append(f"Parent reminder ID: {reminder['parent_id']}")
+    if reminder["locations"]:
+        lines.append("Locations:")
+        for loc in reminder["locations"]:
+            address = loc.get("address") or ""
+            title = loc.get("title") or ""
+            if title:
+                lines.append(f"  Title: {title}")
+            if address:
+                for line in str(address).splitlines():
+                    lines.append(f"  Address: {line}")
+            lines.append(
+                "  Lat/Lon: {} / {} (radius {})".format(
+                    _fmt(loc.get("latitude")),
+                    _fmt(loc.get("longitude")),
+                    _fmt(loc.get("radius")),
+                )
+            )
+            if loc.get("proximity") is not None:
+                lines.append(f"  Proximity: {loc['proximity']}")
+            if loc.get("location_uid"):
+                lines.append(f"  Location UID: {loc['location_uid']}")
+            if loc.get("reference_frame"):
+                lines.append(f"  Reference frame: {loc['reference_frame']}")
+    lines.append(f"Reminder ID: {reminder['id']}")
+    return "\n".join(lines)
+
+
+def _fmt(value):
+    if value is None:
+        return ""
+    if isinstance(value, float):
+        return f"{value:.6f}"
+    return str(value)
+
+
+def _format_date_line(value):
+    if not value:
+        return ""
+    iso = value.get("iso")
+    raw = value.get("raw")
+    if iso and raw is not None:
+        return f"{iso} (raw {raw})"
+    if iso:
+        return iso
+    return ""
+
+
+def parse_args(argv):
+    parser = argparse.ArgumentParser(
+        prog="rereminder",
+        description="Fuzzy search Reminders.app database for a reminder and print metadata.",
+    )
+    parser.add_argument("query", help="Search string (fuzzy match against title/notes)")
+    parser.add_argument("--db", dest="db_path", help="Path to Reminders sqlite DB")
+    parser.add_argument("--limit", type=int, default=10, help="Max results (default: 10)")
+    parser.add_argument("--min-score", type=float, default=0.3, help="Minimum fuzzy score (0-1)")
+    parser.add_argument("--format", choices=["text", "json"], default="text")
+    return parser.parse_args(argv)
+
+
+def main(argv):
+    args = parse_args(argv)
+    if args.min_score < 0 or args.min_score > 1:
+        print("--min-score must be between 0 and 1", file=sys.stderr)
+        return 2
+
+    db_path = args.db_path
+    if not db_path:
+        candidates = default_db_paths()
+        if not candidates:
+            print("No Reminders database found. Use --db to specify a path.", file=sys.stderr)
+            return 2
+        db_path = str(candidates[0])
+
+    if not os.path.exists(db_path):
+        print(f"Database not found: {db_path}", file=sys.stderr)
+        return 2
+
+    try:
+        conn = open_db(db_path)
+    except sqlite3.OperationalError as exc:
+        print(f"Unable to open database (read-only): {exc}", file=sys.stderr)
+        print("You may need to grant your shell Full Disk Access in System Settings.", file=sys.stderr)
+        return 2
+
+    try:
+        results = gather_reminders(conn, args.query, args.min_score)
+    finally:
+        conn.close()
+
+    if not results:
+        print("No reminders matched the query.")
+        return 1
+
+    if args.limit and args.limit > 0:
+        results = results[: args.limit]
+
+    if args.format == "json":
+        payload = {
+            "db_path": db_path,
+            "count": len(results),
+            "results": results,
+        }
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+
+    for idx, reminder in enumerate(results, start=1):
+        print(_render_text(reminder))
+        if idx != len(results):
+            print("\n---\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
