@@ -70,6 +70,15 @@ Library-field correlation for this failing entry:
 ## Remaining uncertainty
 - `cloudType=0` may include more than one failure subtype (for example, explicit `Waiting` vs no status text + download error). More examples will sharpen this.
 
+## Additional findings (late 2026-02-20)
+- `Loved/Favorite` state is not available as a direct per-track field in `ITLibMediaItem`.
+- Favorite state should be derived by membership in the distinguished Loved playlist (`ITLibDistinguishedPlaylistKindLovedSongs = 52`), named `Favorite Songs` in this library.
+- Distinguished Applications playlist (`kind = 51`) was checked and is not present in this library.
+- Re-adding lost tracks can replace old entries and reset per-track counters.
+  - Example observed: `Breanne Düren / Gem - EP` re-added tracks remained as only copies (`cloudType=0`, local), all with `Play Count=0`.
+  - No duplicate old rows remained in-library to copy original play counts from.
+- The strict Apple Music unavailable subset (`cloudType=9` + `kind=Apple Music AAC audio file`) can change quickly as tracks are deleted/re-added; treat exported lists as time snapshots.
+
 ## Script
 Initial helper script:
 - `scripts/cloudscan.swift`
