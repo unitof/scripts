@@ -53,6 +53,20 @@ These mappings are inferred from local evidence and should be treated as provisi
   - `An unknown error occurred (7608)`
   - Same failure reproduced from iOS
 
+## Error correlation (The First Noel)
+Exact error strings observed:
+- iOS: `This item cannot be downloaded. The item you have requested is not available for download.`
+- macOS: `This item cannot be downloaded.`
+- macOS: `There was a problem downloading “The First Noel / The First Noel - Single / Carinthia”. An unknown error occurred (7608).`
+
+Library-field correlation for this failing entry:
+- `cloudType=0` (`waiting_or_unavailable`)
+- `locationType=3` (`Cloud`)
+- `isCloud=1`
+- `hasLocation=0` (no local file URL)
+- `storeItemID=0`
+- `kind=MPEG audio file`
+
 ## Remaining uncertainty
 - `cloudType=0` may include more than one failure subtype (for example, explicit `Waiting` vs no status text + download error). More examples will sharpen this.
 
@@ -66,6 +80,8 @@ Examples:
 swift scripts/cloudscan.swift --counts
 swift scripts/cloudscan.swift --find-title "Vampire Pills"
 swift scripts/cloudscan.swift --cloud-type 9 --limit 50
+swift scripts/cloudscan.swift --status matched --limit 50
+swift scripts/cloudscan.swift --problems --limit 200
 ```
 
 ## Notes for future scripts
