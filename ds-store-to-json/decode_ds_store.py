@@ -29,6 +29,9 @@ def _json_safe(value: Any) -> Any:
     if isinstance(value, (dt.datetime, dt.date, dt.time)):
         return value.isoformat()
 
+    if isinstance(value, bytearray):
+        value = bytes(value)
+
     if isinstance(value, bytes):
         if value.startswith(b"bplist00"):
             try:
@@ -58,6 +61,17 @@ def _json_safe(value: Any) -> Any:
     return repr(value)
 
 
+def _record_token(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, bytes):
+        try:
+            return value.decode("ascii")
+        except UnicodeDecodeError:
+            return value.hex()
+    return str(value)
+
+
 def decode_ds_store(path: Path) -> dict[str, Any]:
     records: list[dict[str, Any]] = []
 
@@ -65,9 +79,9 @@ def decode_ds_store(path: Path) -> dict[str, Any]:
         for rec in ds:
             records.append(
                 {
-                    "filename": rec.filename,
-                    "code": rec.code,
-                    "type": rec.type,
+                    "filename": _record_token(rec.filename),
+                    "code": _record_token(rec.code),
+                    "type": _record_token(rec.type),
                     "value": _json_safe(rec.value),
                 }
             )
