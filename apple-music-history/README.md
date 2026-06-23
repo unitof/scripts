@@ -18,9 +18,36 @@ The data repository lives separately at:
 ## Scripts
 
 - `scripts/export_current_favorite_songs.swift`: exports the current Apple built-in `Favorite Songs` playlist through `iTunesLibrary.framework`.
+- `scripts/backblaze_musicdb_manifest.py`: parses local Backblaze `bz_done_*.dat` logs and creates weekly `Library.musicdb` restore manifests.
 - `scripts/march_csv_to_playlist_tsv.py`: converts the recovered March 6 parser CSV into the canonical playlist TSV.
 - `scripts/diff_playlist_states.py`: compares two canonical playlist TSV files by `persistent_id`.
 - `scripts/capture_current_snapshot.zsh`: exports the current local `Favorite Songs.tsv` and commits it in the playlist-history repo.
+
+## Backblaze Credentials
+
+The local manifest step does not need API keys:
+
+```zsh
+scripts/backblaze_musicdb_manifest.py
+```
+
+It writes:
+
+- `data/backblaze-all-musicdb.tsv`
+- `data/backblaze-weekly-musicdb.tsv`
+
+For API/automation work, copy `.env.example` to `.env` and fill only what is needed. The `.env` file is git-ignored.
+
+Backblaze B2 keys come from the Backblaze web console:
+
+1. Sign in to Backblaze.
+2. Go to **B2 Cloud Storage**.
+3. Open **Application Keys**.
+4. Choose **Add a New Application Key**.
+5. Prefer a least-privilege key for the restore bucket/snapshot, with read/list permissions.
+6. Copy the key ID and application key immediately; Backblaze only shows the secret key once.
+
+Important: B2 application keys are for B2 Cloud Storage. They are useful after a Computer Backup restore is saved to B2, but they do not appear to initiate Computer Backup restores by themselves. Creating the point-in-time Computer Backup restore may still require browser/session automation against the Backblaze web console.
 
 ## Capture Current State
 
