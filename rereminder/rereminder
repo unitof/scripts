@@ -73,14 +73,11 @@ def _format_timestamp(value, tzinfo):
     unix_ts = _to_unix_timestamp(value)
     if unix_ts is None:
         return None
-    return dt.datetime.fromtimestamp(unix_ts, tz=tzinfo).isoformat()
+    return dt.datetime.fromtimestamp(unix_ts, tz=tzinfo).strftime("%Y-%m-%d %I:%M %p")
 
 
 def _date_field(value, tzinfo):
-    return {
-        "raw": value,
-        "iso": _format_timestamp(value, tzinfo),
-    }
+    return {"iso": _format_timestamp(value, tzinfo)}
 
 
 def default_db_paths():
@@ -219,7 +216,10 @@ def _render_text(reminder):
     lines.append("Start: {}".format(_format_date_line(reminder["start"])))
     completed_flag = reminder["completed"]["flag"]
     completed_date = _format_date_line(reminder["completed"]["date"])
-    lines.append(f"Completed: {completed_flag} ({completed_date})")
+    if completed_flag in (0, 1, None):
+        lines.append(f"Completed: {completed_date}")
+    else:
+        lines.append(f"Completed: {completed_flag} ({completed_date})")
     lines.append(f"Priority: {reminder['priority']}")
     lines.append(f"Flagged: {reminder['flagged']}")
     if reminder.get("timezone"):
@@ -265,9 +265,6 @@ def _format_date_line(value):
     if not value:
         return ""
     iso = value.get("iso")
-    raw = value.get("raw")
-    if iso and raw is not None:
-        return f"{iso} (raw {raw})"
     if iso:
         return iso
     return ""
