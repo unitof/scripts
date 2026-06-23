@@ -1,6 +1,8 @@
-# script-itunesmatchsearch
-
 Read-only tooling for Music.app iCloud/Match analysis on macOS.
+
+Useful for identifying unmatched files, rare MP3s, etc.
+
+Mostly generated via ongoing conversation with Codex. Use at your own risk, no warranty, etc.
 
 ## What we confirmed (2026-02-20)
 - Primary library package is:
