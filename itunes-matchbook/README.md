@@ -1,3 +1,5 @@
+# script-itunesmatchbook
+
 Read-only tooling for Music.app iCloud/Match analysis on macOS.
 
 Useful for identifying unmatched files, rare MP3s, etc.
