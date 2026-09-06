@@ -10,6 +10,8 @@ import sys
 import urllib.parse
 
 APPLE_EPOCH = 978307200  # 2001-01-01T00:00:00Z
+HIGHLIGHT_START = "\033[1;33m"
+HIGHLIGHT_END = "\033[0m"
 
 
 def _normalize(text):
@@ -45,6 +47,31 @@ def score_reminder(query, title, notes):
     notes_score = _fuzzy_score(q, notes_n)
     combined_score = _fuzzy_score(q, combined)
     return max(title_score, notes_score * 0.9, combined_score * 0.95)
+
+
+def _highlight_text(query, text, enabled):
+    if not enabled or not query or not text:
+        return text
+
+    query_n = _normalize(query)
+    text_n = str(text).lower()
+    exact_start = text_n.find(query_n)
+    if exact_start >= 0:
+        ranges = [(exact_start, exact_start + len(query_n))]
+    else:
+        matcher = difflib.SequenceMatcher(None, query_n, text_n)
+        ranges = [(block.b, block.b + block.size) for block in matcher.get_matching_blocks() if block.size]
+
+    highlighted = str(text)
+    for start, end in reversed(ranges):
+        highlighted = (
+            highlighted[:start]
+            + HIGHLIGHT_START
+            + highlighted[start:end]
+            + HIGHLIGHT_END
+            + highlighted[end:]
+        )
+    return highlighted
 
 
 def _to_unix_timestamp(value):
@@ -198,17 +225,18 @@ def gather_reminders(conn, query, min_score):
     return results
 
 
-def _render_text(reminder):
+def _render_text(reminder, query="", highlight=False):
     lines = []
     score = reminder["score"]
     lines.append(f"Score: {score:.2f}")
-    lines.append(f"Title: {reminder['title']}")
+    title = _highlight_text(query, reminder["title"], highlight)
+    lines.append(f"Title: {title}")
     if reminder["list"]["name"]:
         lines.append(f"List: {reminder['list']['name']}")
     if reminder.get("notes"):
         lines.append("Notes:")
         for line in str(reminder["notes"]).splitlines():
-            lines.append(f"  {line}")
+            lines.append(f"  {_highlight_text(query, line, highlight)}")
     lines.append("Created: {}".format(_format_date_line(reminder["created"])))
     lines.append("Modified: {}".format(_format_date_line(reminder["modified"])))
     lines.append("Due: {}".format(_format_date_line(reminder["due"])))
@@ -278,7 +306,13 @@ def parse_args(argv):
     parser.add_argument("query", help="Search string (fuzzy match against title/notes)")
     parser.add_argument("--db", dest="db_path", help="Path to Reminders sqlite DB")
     parser.add_argument("--limit", type=int, default=10, help="Max results (default: 10)")
-    parser.add_argument("--min-score", type=float, default=0.3, help="Minimum fuzzy score (0-1)")
+    parser.add_argument("--min-score", type=float, default=0.7, help="Minimum fuzzy score (default: 0.7)")
+    parser.add_argument(
+        "--color",
+        choices=["auto", "always", "never"],
+        default="auto",
+        help="Highlight matches in text output (default: auto)",
+    )
     parser.add_argument("--format", choices=["text", "json"], default="text")
     return parser.parse_args(argv)
 
@@ -329,8 +363,11 @@ def main(argv):
         print(json.dumps(payload, indent=2, ensure_ascii=False))
         return 0
 
+    highlight = args.color == "always" or (
+        args.color == "auto" and sys.stdout.isatty() and "NO_COLOR" not in os.environ
+    )
     for idx, reminder in enumerate(results, start=1):
-        print(_render_text(reminder))
+        print(_render_text(reminder, args.query, highlight))
         if idx != len(results):
             print("\n---\n")
     return 0

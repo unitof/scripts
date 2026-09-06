@@ -31,6 +31,7 @@ Requirements:
 | `/Users/jacob/repos/script-DS_StoreToJSON` | `ds-store-to-json/` |
 | `/Users/jacob/repos/script-applemusichistory` | `apple-music-history/` |
 | `/Users/jacob/repos/script-itunesmatchbook` | `itunes-matchbook/` |
+| `/Users/jacob/repos/script-rereminder` | `rereminder/` |
 
 ## Migration Approach
 
@@ -68,6 +69,7 @@ own merge commit:
 - `1fac06a Import ds-store-to-json history`
 - `efbaecb Import apple-music-history history`
 - `2e45da6 Import itunes-matchbook history`
+- `e10b185 Import rereminder history`
 
 ## Reproducible Command Shape
 
@@ -171,4 +173,3 @@ Useful tap constraints from the planning thread:
 - For an unofficial tap with no `Formula/` directory, root-level `*.rb` formula
   files can work, but Homebrew will not discover formulas from arbitrary script
   subdirectories.
-
