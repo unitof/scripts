@@ -6,6 +6,8 @@ Small Python 3 CLI with one dependency (PyYAML); no Twilio SDK.
 lookup +14155550100
 lookup +14155550100 --raw
 lookup +14155550100 --json
+lookup +14155550100 --no-line-status
+lookup +14155550100 --free
 ```
 
 The number is required. Prefer E.164 with a leading `+`; Twilio defaults national
@@ -66,18 +68,25 @@ configuration files are rejected. The example contains placeholders only.
 
 Every invocation makes one HTTPS GET, with a 30-second timeout and no retries or
 redirects, to `https://lookups.twilio.com/v2/PhoneNumbers/{encoded-number}`.
-By default no `Fields` parameter is sent: only free basic formatting/validation
-is requested. To request caller name and carrier/line type, set `"fields":
-["caller_name", "line_type_intelligence"]`. Both are paid add-ons. Caller name
-covers US carriers; Canada line type intelligence requires approval. Unrequested
-packages such as `line_status` appear as null in the standard response.
+By default `Fields=caller_name,line_type_intelligence,line_status` requests all
+three paid packages. Caller name covers US carriers; Canada line type intelligence
+requires approval. Line status is a public beta; active does not necessarily mean
+reachable. Missing data, nulls, Unknown statuses, and package errors remain visible
+in the response.
 
 The optional `fields` config array accepts `caller_name`, `line_type_intelligence`
 and `line_status`; select all three to request status data as well at additional cost.
-Use `"fields": []` for only free basic formatting/validation. All requested
+Omitting `fields` selects all three. `--no-caller-name`,
+`--no-line-type-intelligence`, and `--no-line-status` each remove their package
+after config selection; they can be combined. `--free` overrides all configured
+and default packages, including unrecognized future package names, and omits
+`Fields` entirely. It works with `--raw`/`--json` and the disabling flags.
+Use `--free` or `"fields": []` for only free basic formatting/validation. All requested
 packages may be billed individually. On 2026-10-03 Twilio's published line type
 rate is $0.008/request and line status starts at $0.007/request; caller name is
-also paid, and exact rates/availability depend on the account and market. Check
+also paid ($0.01 per US request, even if no caller name is available), making the
+three-package starting total about $0.025 per lookup. Exact rates/availability
+depend on the account and market. Check
 current pricing before using real credentials. No live calls were made for tests.
 
 References: [Lookup v2 API/auth/packages](https://www.twilio.com/docs/lookup/v2-api),

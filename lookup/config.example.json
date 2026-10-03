@@ -1,5 +1,5 @@
 {
   "api_key_sid": "REPLACE_WITH_API_KEY_SID",
   "api_key_secret": "REPLACE_WITH_API_KEY_SECRET",
-  "fields": []
+  "fields": ["caller_name", "line_type_intelligence", "line_status"]
 }

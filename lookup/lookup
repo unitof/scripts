@@ -14,7 +14,7 @@ import urllib.request
 
 
 PACKAGES = ("caller_name", "line_type_intelligence", "line_status")
-DEFAULT_FIELDS = []
+DEFAULT_FIELDS = list(PACKAGES)
 
 
 class LookupError(Exception):
@@ -27,7 +27,7 @@ def config_path():
     return directory / "twilio-lookup" / "config.json"
 
 
-def load_config():
+def load_config(free=False):
     path = config_path()
     try:
         with path.open(encoding="utf-8") as stream:
@@ -46,7 +46,8 @@ def load_config():
             or not isinstance(secret, str) or not secret.strip()
             or secret.startswith("REPLACE_")):
         raise LookupError("Config requires an API Key SID (SK + 32 hex digits) and API key secret.")
-    fields = config.get("fields", DEFAULT_FIELDS)
+    # --free ignores package configuration entirely, including future packages.
+    fields = [] if free else config.get("fields", DEFAULT_FIELDS)
     if (not isinstance(fields, list) or any(field not in PACKAGES for field in fields)
             or len(fields) != len(set(fields))):
         raise LookupError("Config fields must be a unique list of caller_name, line_type_intelligence, line_status.")
@@ -75,9 +76,13 @@ def fetch(number, sid, secret, fields):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Twilio Lookup; paid caller/carrier packages are selected in config.")
+    parser = argparse.ArgumentParser(description="Twilio Lookup with paid caller name, line type intelligence, and line status by default.")
     parser.add_argument("number", help="Phone number; prefer E.164, e.g. +14155550100. National numbers default to US.")
     parser.add_argument("--raw", "--json", action="store_true", help="Write the exact HTTP response body, including on API errors.")
+    for package in PACKAGES:
+        parser.add_argument("--no-" + package.replace("_", "-"), action="store_true",
+                            help="Disable " + package.replace("_", " ") + " after config selection.")
+    parser.add_argument("--free", action="store_true", help="Request only free basic lookup; overrides all configured/default packages.")
     args = parser.parse_args(argv)
     if not args.number.strip():
         parser.error("number must not be empty")
@@ -87,7 +92,8 @@ def main(argv=None):
                 import yaml
             except ImportError:
                 raise LookupError("YAML output needs PyYAML; install lookup/requirements.txt, or use --raw.")
-        sid, secret, fields = load_config()
+        sid, secret, fields = load_config(free=args.free)
+        fields = [field for field in fields if not getattr(args, "no_" + field)]
         status, body = fetch(args.number, sid, secret, fields)
         if args.raw:
             sys.stdout.buffer.write(body)

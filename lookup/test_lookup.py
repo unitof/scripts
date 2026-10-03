@@ -173,11 +173,40 @@ class LookupTests(unittest.TestCase):
             self.write_config()
             self.assertEqual(self.run_cli(["one"])[0], 1)
 
-    def test_omitted_fields_is_free_basic(self):
+    def test_omitted_fields_requests_all_three(self):
         self.config.pop("fields")
         self.write_config()
         self.assertEqual(self.run_cli(["one"])[0], 0)
+        query = lookup.urllib.parse.parse_qs(lookup.urllib.parse.urlsplit(self.opener.open.call_args[0][0].full_url).query)
+        self.assertEqual(query, {"Fields": [",".join(lookup.PACKAGES)]})
+
+    def test_each_disable_flag_after_config_selection(self):
+        self.config["fields"] = list(lookup.PACKAGES)
+        self.write_config()
+        for package in lookup.PACKAGES:
+            self.assertEqual(self.run_cli(["one", "--no-" + package.replace("_", "-")])[0], 0)
+            query = lookup.urllib.parse.parse_qs(lookup.urllib.parse.urlsplit(self.opener.open.call_args[0][0].full_url).query)
+            self.assertEqual(query["Fields"], [",".join(p for p in lookup.PACKAGES if p != package)])
+
+    def test_disable_flags_combine_and_do_not_add_packages(self):
+        flags = ["--no-" + p.replace("_", "-") for p in lookup.PACKAGES]
+        self.assertEqual(self.run_cli(["one"] + flags)[0], 0)
         self.assertNotIn("?", self.opener.open.call_args[0][0].full_url)
+        self.config["fields"] = ["caller_name"]
+        self.write_config()
+        self.assertEqual(self.run_cli(["one", "--no-line-status"])[0], 0)
+        self.assertIn("Fields=caller_name", self.opener.open.call_args[0][0].full_url)
+
+    def test_free_overrides_every_package_config(self):
+        for fields in (list(lookup.PACKAGES), ["future_paid_package"], "invalid", None):
+            self.config["fields"] = fields
+            self.write_config()
+            for flags in (["--free"], ["--free", "--raw"], ["--free", "--json", "--no-caller-name"]):
+                code, output, errors = self.run_cli(["one"] + flags)
+                self.assertEqual((code, errors), (0, ""))
+                self.assertNotIn("?", self.opener.open.call_args[0][0].full_url)
+                if "--raw" in flags or "--json" in flags:
+                    self.assertEqual(output, self.body)
 
     def test_package_error_preserved(self):
         self.opener.open.return_value = Response(b'{"line_type_intelligence":{"error_code":60601}}')
