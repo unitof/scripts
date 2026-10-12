@@ -51,3 +51,16 @@
 - Put scripts in `scripts/`.
 - Keep output grep-friendly: tab-separated fields or explicit `key=value`.
 - Include `--help` and `--limit` in scripts that list tracks.
+
+## Export refresh handoff
+- Current project directory: `/Users/jacob/repos/scripts/itunes-matchbook`; Git root: `/Users/jacob/repos/scripts`. Earlier names were `script-itunesmatchsearch` and `script-itunesmatchbook`.
+- Latest report destination used: `/Users/jacob/Desktop/MISSINGSONGS.txt` (tab-separated despite its extension). The deleted Ben Randall album was saved separately in `MISSINGSONGS_supplement.txt` on Desktop.
+- The scanner currently emits base columns only. Playback enrichment was done with temporary Swift scripts, not a committed reusable command.
+- Preserve a timestamped snapshot before refreshing. Generate and validate the entire enriched export in a temporary file, then atomically replace the destination; do not truncate a valuable report before the library query succeeds.
+- Supplemental columns previously exported: `Play Count`, `Last Played`, `Skip Count`, `Skip Date`, `Play Status`, `Rating`, `Rating Computed`. These were report labels, not verified Music UI names. Rating/favorite are user actions, not automatic playback updates.
+- Query playback fields directly from each selected media item in the same library snapshot. Preserve `persistentID` in future exports for precise identity. Never pick an arbitrary first match by store ID: catalog IDs can be shared by originals and replacement copies.
+- Compare row identities, not complete rows whose counters/dates change. Report additions and removals separately. Leaving the problem report does not prove a song was deleted: its cloud state may have changed.
+- `cloudType=0` alone does not prove failure: newly imported local Gem tracks also had code 0. Distinguish local imports from remote problem entries using location fields.
+- The Apple Music AAC kind filter identifies a subset, not all Apple Music acquisitions; known unavailable examples such as Vampire Pills had plain AAC kind.
+- Favorite playlist membership (kind 52) is an observable proxy, not proof of the exact on-disk favorite storage layout. Its membership and Applications absence were historical observations; query afresh.
+- No play-count write or migration was performed. The Gem originals disappeared, but the mechanism (automatic replacement versus user deletion) was not established.

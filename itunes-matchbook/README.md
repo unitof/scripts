@@ -101,3 +101,12 @@ swift scripts/cloudscan.swift --problems --limit 200
 - Keep operations read-only.
 - Build focused scripts rather than one large tool.
 - Prefer explicit outputs that are easy to diff and pipe into `rg`, `sort`, or `jq`.
+
+## Current location and export refresh notes
+The project is now `/Users/jacob/repos/scripts/itunes-matchbook`, within the shared `scripts` Git repository. Earlier project names in conversation were `script-itunesmatchsearch` and `script-itunesmatchbook`.
+
+The latest report destination used was `~/Desktop/MISSINGSONGS.txt`, a TSV with playback columns: `Play Count`, `Last Played`, `Skip Count`, `Skip Date`, `Play Status`, `Rating`, and `Rating Computed`. The scanner itself emits only the base columns; enrichment previously used temporary Swift scripts. Preserve the previous export before refreshing and replace it only after the full result is validated.
+
+Report removals mean items no longer appear under the query criteria; they do not by themselves establish deletion. Code 0 also appeared on newly imported local tracks, so it is not sufficient evidence of a broken download. Filtering by Apple Music AAC kind yields a subset and can omit Apple Music acquisitions reported as plain AAC.
+
+For future enrichment, use the selected track directly and include its persistent ID. Catalog/store IDs may be shared by multiple library copies and must not select an arbitrary original or replacement. No play-count migration was performed for Gem - EP, and the disappearance of its original entries did not establish how they were removed.
