@@ -9,3 +9,4 @@
 - Verify the export is nonempty and has the expected header before accepting a large diff. Compare membership by persistent_id using `scripts/diff_playlist_states.py`; framework ordering can cause noisy line diffs.
 - Capture commits locally but does not push. When asked to sync, push the data repository and report additions/removals and the commit. Push requested docs changes as appropriate too.
 - Never directly edit Music database files or switch library preferences to take a snapshot.
+- October 11, 2026 preflight: June snapshot had 486 songs, live export had 487, and no persistent IDs overlapped. Exact title/artist/album multiset comparison showed only Lakes of Canada by Tyler Lyle (So, This is Christmas?) added, no removals. The reason IDs changed is unverified. Do not interpret ID churn as all favorites being replaced; cross-check metadata, preserving duplicate counts and acknowledging ambiguity.
