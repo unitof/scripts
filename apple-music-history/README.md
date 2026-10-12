@@ -2,7 +2,9 @@
 
 Small utilities for preserving Apple Music playlist states as git history.
 
-The data repository lives separately at:
+The data repository lives separately at `~/repos/apple-music-playlist-history`
+with remote `git@github.com:unitof/apple-music-playlist-history.git`.
+The following Drive location is a Finder alias, not a directory usable by shell scripts:
 
 `~/Library/CloudStorage/GoogleDrive-j@cobford.com/My Drive/Filing Cabinet/Account Data Exports & Backups/Apple Music Playlist History`
 
@@ -54,14 +56,14 @@ Important: B2 application keys are for B2 Cloud Storage. They are useful after a
 From the playlist-history repo, the minimal command is:
 
 ```zsh
-/Users/jacob/repos/script-applemusichistory/scripts/capture_current_snapshot.zsh
+/Users/jacob/repos/scripts/apple-music-history/scripts/capture_current_snapshot.zsh
 ```
 
 Or explicitly:
 
 ```zsh
-/Users/jacob/repos/script-applemusichistory/scripts/capture_current_snapshot.zsh \
-  --playlist-repo "$HOME/Library/CloudStorage/GoogleDrive-j@cobford.com/My Drive/Filing Cabinet/Account Data Exports & Backups/Apple Music Playlist History"
+/Users/jacob/repos/scripts/apple-music-history/scripts/capture_current_snapshot.zsh \
+  --playlist-repo "$HOME/repos/apple-music-playlist-history"
 ```
 
 Blank commit policy is controlled with `--blank=auto|always|never`.
@@ -70,9 +72,12 @@ Blank commit policy is controlled with `--blank=auto|always|never`.
 - `always` records every successful no-change capture.
 - `never` skips no-change captures.
 
-## Current State of the Investigation
+Capture commits locally; run `git push` in the data repository to sync GitHub.
+Only the built-in Favorite Songs playlist is currently captured.
 
-- The playlist-history repo currently has two known states for `Favorite Songs.tsv`.
+## Historical Investigation (June 2026)
+
+- The playlist-history repo initially had two known states for `Favorite Songs.tsv`.
 - The March 6 state came from a Time Machine `Library.musicdb` snapshot at `2026-03-06-114914`.
 - The current state came from `iTunesLibrary.framework` against the live local Music.app library on `2026-06-22`.
 - The March 6 database used Apple Music's private `hfma` format. The useful parser probe was a relaxed scratch run of `rinsuki/musicdb2sqlite`; it interpreted `rate_like = 2` as the Favorite Songs candidate.
