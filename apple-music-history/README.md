@@ -75,6 +75,43 @@ Blank commit policy is controlled with `--blank=auto|always|never`.
 Capture commits locally; run `git push` in the data repository to sync GitHub.
 Only the built-in Favorite Songs playlist is currently captured.
 
+## Daily Capture Without An LLM
+
+Install a per-user macOS LaunchAgent (default: 10:00 AM local time):
+
+```zsh
+python3 scripts/install_daily_agent.py
+```
+
+Use `--hour 14 --minute 30` to choose a different time. This generates
+`~/Library/LaunchAgents/com.unitof.apple-music-history.plist` and loads it.
+The Mac must be logged in; missed runs during sleep are coalesced on wake.
+No Codex automation, model invocation, or API key is involved.
+
+The daily job exports Favorite Songs, commits changed states (or an unchanged
+state for each successful daily run), and pushes normally to the configured
+Git upstream. It does not force an Apple cloud sync, change Music.app, or
+rewrite Git history. Keep Music's local library synced separately.
+
+It uses a repository lock, refuses dirty checkouts, times out exports after
+120 seconds, and rejects empty/malformed snapshots. Push failures leave local
+commits intact for the next run; remote divergence needs manual resolution.
+Git SSH runs noninteractively, so unattended access must already work. The
+existing `git cic` helper supplies commit trailers; it does not invoke an LLM.
+
+Logs: `~/Library/Logs/apple-music-history/daily.log` and `daily.error.log`.
+
+```zsh
+launchctl print gui/$(id -u)/com.unitof.apple-music-history
+launchctl kickstart gui/$(id -u)/com.unitof.apple-music-history
+launchctl bootout gui/$(id -u)/com.unitof.apple-music-history
+```
+
+To permanently uninstall, unload first and remove only the generated plist.
+The script source and playlist history remain in their existing repositories.
+
+The scheduler uses Apple's [per-user LaunchAgent mechanism](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html).
+
 ## Historical Investigation (June 2026)
 
 - The playlist-history repo initially had two known states for `Favorite Songs.tsv`.
