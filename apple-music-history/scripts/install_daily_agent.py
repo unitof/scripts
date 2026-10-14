@@ -12,6 +12,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--hour", type=int, choices=range(24), default=10)
     parser.add_argument("--minute", type=int, choices=range(60), default=0)
+    parser.add_argument("--push", action="store_true", help="Enable uploads to the Git upstream (may be public)")
     parser.add_argument("--playlist-repo", type=Path,
                         default=Path.home() / "repos/apple-music-playlist-history")
     args = parser.parse_args()
@@ -29,10 +30,11 @@ def main():
         "Label": label,
         "ProgramArguments": ["/bin/zsh", str(Path(__file__).resolve().with_name("run_daily_snapshot.zsh"))],
         "WorkingDirectory": str(repo),
-        "EnvironmentVariables": {"HOME": str(home), "APPLE_MUSIC_HISTORY_REPO": str(repo)},
+        "EnvironmentVariables": {"HOME": str(home), "APPLE_MUSIC_HISTORY_REPO": str(repo),
+                                 "APPLE_MUSIC_HISTORY_PUSH": "1" if args.push else "0"},
         "StartCalendarInterval": {"Hour": args.hour, "Minute": args.minute},
         "LimitLoadToSessionType": "Aqua",
-        "ProcessType": "Background",
+        "ProcessType": "Standard",
         "StandardOutPath": str(logs / "daily.log"),
         "StandardErrorPath": str(logs / "daily.error.log"),
         "Umask": 0o077,
