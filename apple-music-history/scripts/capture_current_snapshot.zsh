@@ -5,10 +5,11 @@ script_dir=${0:A:h}
 playlist_repo=${APPLE_MUSIC_HISTORY_REPO:-$PWD}
 blank_policy=auto
 playlist_file="Favorite Songs.tsv"
+push_after=no
 
 usage() {
   cat <<'EOF'
-usage: capture_current_snapshot.zsh [--playlist-repo PATH] [--blank=auto|always|never]
+usage: capture_current_snapshot.zsh [--playlist-repo PATH] [--blank=auto|always|never] [--push]
 
 Exports the current local Music.app Favorite Songs playlist and commits it in
 the playlist-history repo.
@@ -39,6 +40,10 @@ while (( $# )); do
       blank_policy=never
       shift
       ;;
+    --push)
+      push_after=yes
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -67,16 +72,34 @@ if [[ ! -d "$playlist_repo/.git" ]]; then
   exit 1
 fi
 
+zmodload zsh/system
+lock_file="$playlist_repo/.git/apple-music-snapshot.lock"
+touch "$lock_file"
+if ! zsystem flock -t 0 -f lock_fd "$lock_file"; then
+  echo "another playlist capture is running" >&2
+  exit 1
+fi
+
 if [[ -n "$(git -C "$playlist_repo" status --porcelain)" ]]; then
   echo "playlist repo has uncommitted changes; refusing to overwrite snapshot" >&2
   git -C "$playlist_repo" status --short >&2
   exit 1
 fi
 
-tmp=$(mktemp "${TMPDIR:-/tmp}/applemusic-favorite-songs.XXXXXX.tsv")
+tmp=$(mktemp "${TMPDIR:-/tmp}/applemusic-favorite-songs.XXXXXX")
 trap 'rm -f "$tmp"' EXIT
 
-swift "$script_dir/export_current_favorite_songs.swift" > "$tmp"
+/usr/bin/perl -e 'alarm 120; exec @ARGV or die "exec failed: $!\n"' \
+  swift "$script_dir/export_current_favorite_songs.swift" > "$tmp"
+
+if ! awk -F '\t' '
+  NR == 1 { if ($0 != "persistent_id\ttitle\tartist\talbum\turl") exit 1; next }
+  NF != 5 || $1 !~ /^[0-9]+$/ || seen[$1]++ { bad = 1 }
+  END { if (NR < 2 || bad) exit 1 }
+' "$tmp"; then
+  echo "empty or malformed playlist export; refusing to overwrite snapshot" >&2
+  exit 1
+fi
 
 snapshot_date=$(date +%Y-%m-%dT%H:%M:%S%z)
 
@@ -84,11 +107,9 @@ if [[ ! -f "$target" ]] || ! cmp -s "$tmp" "$target"; then
   cp "$tmp" "$target"
   git -C "$playlist_repo" add "$playlist_file"
   GIT_AUTHOR_DATE="$snapshot_date" git -C "$playlist_repo" cic -m "Record Favorite Songs current state"
-  exit 0
-fi
-
-should_blank=no
-case "$blank_policy" in
+else
+  should_blank=no
+  case "$blank_policy" in
   always)
     should_blank=yes
     ;;
@@ -102,10 +123,15 @@ case "$blank_policy" in
       should_blank=yes
     fi
     ;;
-esac
+  esac
 
-if [[ "$should_blank" == yes ]]; then
-  GIT_AUTHOR_DATE="$snapshot_date" git -C "$playlist_repo" cic --allow-empty -m "Record Favorite Songs unchanged state"
-else
-  echo "No playlist changes detected; last commit is within 24 hours, so no blank commit was created."
+  if [[ "$should_blank" == yes ]]; then
+    GIT_AUTHOR_DATE="$snapshot_date" git -C "$playlist_repo" cic --allow-empty -m "Record Favorite Songs unchanged state"
+  else
+    echo "No playlist changes detected; blank commit skipped (policy=$blank_policy)."
+  fi
+fi
+
+if [[ "$push_after" == yes ]]; then
+  git -C "$playlist_repo" push
 fi
