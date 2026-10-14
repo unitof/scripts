@@ -88,9 +88,12 @@ Use `--hour 14 --minute 30` to choose a different time. This generates
 The Mac must be logged in; missed runs during sleep are coalesced on wake.
 No Codex automation, model invocation, or API key is involved.
 
-The daily job exports Favorite Songs, commits changed states (or an unchanged
-state for each successful daily run), and pushes normally to the configured
-Git upstream. It does not force an Apple cloud sync, change Music.app, or
+The daily job exports Favorite Songs and commits changed states (or an unchanged
+state for each successful daily run). It captures locally by default. Install
+with `--push` only after approving uploads to the configured Git upstream:
+`unitof/apple-music-playlist-history` was PUBLIC when checked on October 14, 2026.
+The TSV includes song metadata, persistent IDs, and local file URLs.
+It does not force an Apple cloud sync, change Music.app, or
 rewrite Git history. Keep Music's local library synced separately.
 
 It uses a repository lock, refuses dirty checkouts, times out exports after
@@ -111,6 +114,9 @@ To permanently uninstall, unload first and remove only the generated plist.
 The script source and playlist history remain in their existing repositories.
 
 The scheduler uses Apple's [per-user LaunchAgent mechanism](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html).
+The first live job with Background resource limits timed out despite a direct
+export succeeding; the installer now uses Standard limits. Retest through
+launchctl after changes, and never infer success from loading the plist alone.
 
 ## Historical Investigation (June 2026)
 
