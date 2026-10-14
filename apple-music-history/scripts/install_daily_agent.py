@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import plistlib
 import subprocess
+import tempfile
 
 
 def main():
@@ -26,12 +27,24 @@ def main():
     logs.mkdir(parents=True, exist_ok=True)
     agents.mkdir(parents=True, exist_ok=True)
     destination = agents / f"{label}.plist"
+    binaries = home / "Library/Application Support/apple-music-history"
+    binaries.mkdir(parents=True, exist_ok=True)
+    exporter = binaries / "export-favorite-songs"
+    source = Path(__file__).resolve().with_name("export_current_favorite_songs.swift")
+    with tempfile.TemporaryDirectory(dir=binaries) as temporary:
+        compiled = Path(temporary) / "export-favorite-songs"
+        subprocess.run(["xcrun", "swiftc", str(source), "-framework", "iTunesLibrary",
+                        "-o", str(compiled)], check=True, timeout=180)
+        subprocess.run(["codesign", "--force", "--sign", "-", str(compiled)],
+                       check=True, timeout=30)
+        compiled.replace(exporter)
     plist = {
         "Label": label,
         "ProgramArguments": ["/bin/zsh", str(Path(__file__).resolve().with_name("run_daily_snapshot.zsh"))],
         "WorkingDirectory": str(repo),
         "EnvironmentVariables": {"HOME": str(home), "APPLE_MUSIC_HISTORY_REPO": str(repo),
-                                 "APPLE_MUSIC_HISTORY_PUSH": "1" if args.push else "0"},
+                                 "APPLE_MUSIC_HISTORY_PUSH": "1" if args.push else "0",
+                                 "APPLE_MUSIC_HISTORY_EXPORTER": str(exporter)},
         "StartCalendarInterval": {"Hour": args.hour, "Minute": args.minute},
         "LimitLoadToSessionType": "Aqua",
         "ProcessType": "Standard",

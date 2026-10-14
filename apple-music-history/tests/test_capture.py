@@ -15,7 +15,7 @@ TRAILER = "Co-authored-by: Codex (test fixture) <codex@openai.com>"
 
 class CaptureTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = tempfile.TemporaryDirectory(prefix="playlist test ")
         self.addCleanup(self.temp.cleanup)
         root = Path(self.temp.name)
         self.repo = root / "repo"
@@ -65,6 +65,13 @@ class CaptureTests(unittest.TestCase):
     def test_unchanged_never(self):
         self.assertEqual(self.capture("--blank=never").returncode, 0)
         self.assert_preserved()
+
+    def test_precompiled_exporter(self):
+        self.env["APPLE_MUSIC_HISTORY_EXPORTER"] = str(Path(self.temp.name) / "bin/swift")
+        self.export.write_text(CHANGED)
+        result = self.capture()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.target.read_text(), CHANGED)
 
     def test_unchanged_always(self):
         self.assertEqual(self.capture("--blank=always").returncode, 0)

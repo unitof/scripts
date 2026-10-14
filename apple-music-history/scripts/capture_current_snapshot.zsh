@@ -89,8 +89,12 @@ fi
 tmp=$(mktemp "${TMPDIR:-/tmp}/applemusic-favorite-songs.XXXXXX")
 trap 'rm -f "$tmp"' EXIT
 
-/usr/bin/perl -e 'alarm 120; exec @ARGV or die "exec failed: $!\n"' \
-  swift "$script_dir/export_current_favorite_songs.swift" > "$tmp"
+export_command=(swift "$script_dir/export_current_favorite_songs.swift")
+if [[ -n ${APPLE_MUSIC_HISTORY_EXPORTER:-} ]]; then
+  export_command=("$APPLE_MUSIC_HISTORY_EXPORTER")
+fi
+/usr/bin/perl -e 'alarm 120; exec {$ARGV[0]} @ARGV or die "exec failed: $!\n"' \
+  "${export_command[@]}" > "$tmp"
 
 if ! awk -F '\t' '
   NR == 1 { if ($0 != "persistent_id\ttitle\tartist\talbum\turl") exit 1; next }
