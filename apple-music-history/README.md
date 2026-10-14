@@ -86,7 +86,11 @@ python3 scripts/install_daily_agent.py
 Use `--hour 14 --minute 30` to choose a different time. This generates
 `~/Library/LaunchAgents/com.unitof.apple-music-history.plist` and loads it.
 The Mac must be logged in; missed runs during sleep are coalesced on wake.
-No Codex automation, model invocation, or API key is involved.
+No Codex automation, model invocation, or API key is involved. The installer
+compiles and ad-hoc signs the Swift exporter once under
+`~/Library/Application Support/apple-music-history/export-favorite-songs`;
+the daily job runs that binary without invoking the Swift compiler. Reinstall
+after changing exporter source or upgrading the toolchain/OS.
 
 The daily job exports Favorite Songs and commits changed states (or an unchanged
 state for each successful daily run). It captures locally by default. Install
@@ -114,8 +118,9 @@ To permanently uninstall, unload first and remove only the generated plist.
 The script source and playlist history remain in their existing repositories.
 
 The scheduler uses Apple's [per-user LaunchAgent mechanism](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html).
-The first live job with Background resource limits timed out despite a direct
-export succeeding; the installer now uses Standard limits. Retest through
+Live interpreted Swift jobs timed out during compiler import resolution despite
+direct exports succeeding. The installer uses Standard limits and a precompiled
+exporter to avoid compilation in launchd. Retest through
 launchctl after changes, and never infer success from loading the plist alone.
 
 ## Historical Investigation (June 2026)
