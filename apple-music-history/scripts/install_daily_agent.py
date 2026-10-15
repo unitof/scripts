@@ -31,10 +31,10 @@ def main():
     destination = agents / f"{label}.plist"
     binaries = home / "Library/Application Support/apple-music-history"
     binaries.mkdir(parents=True, exist_ok=True)
-    exporter = binaries / "export-favorite-songs"
+    exporter = binaries / "music-library-archiver"
     source = Path(__file__).resolve().with_name("export_current_favorite_songs.swift")
     with tempfile.TemporaryDirectory(dir=binaries) as temporary:
-        compiled = Path(temporary) / "export-favorite-songs"
+        compiled = Path(temporary) / "music-library-archiver"
         subprocess.run(["xcrun", "swiftc", str(source), "-framework", "iTunesLibrary",
                         "-o", str(compiled)], check=True, timeout=180)
         subprocess.run(["codesign", "--force", "--sign", "-", str(compiled)],
@@ -66,6 +66,7 @@ def main():
     destination.chmod(0o600)
     subprocess.run(["plutil", "-lint", str(destination)], check=True)
     subprocess.run(["launchctl", "bootstrap", domain, str(destination)], check=True)
+    (binaries / "export-favorite-songs").unlink(missing_ok=True)
     print(f"Installed {destination}: daily at {args.hour:02d}:{args.minute:02d} local time")
 
 
