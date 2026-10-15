@@ -15,6 +15,7 @@ def main():
     parser.add_argument("--minute", type=int, choices=range(60), default=0)
     parser.add_argument("--push", action="store_true", help="Enable uploads to the Git upstream (may be public)")
     parser.add_argument("--include-noggy", action="store_true", help="Also capture Noggy; with --push its data is uploaded too")
+    parser.add_argument("--all-playlists", action="store_true", help="Capture all locally exposed playlists; --push publishes all")
     parser.add_argument("--playlist-repo", type=Path,
                         default=Path.home() / "repos/apple-music-playlist-history")
     args = parser.parse_args()
@@ -46,6 +47,7 @@ def main():
         "EnvironmentVariables": {"HOME": str(home), "APPLE_MUSIC_HISTORY_REPO": str(repo),
                                  "APPLE_MUSIC_HISTORY_PUSH": "1" if args.push else "0",
                                  "APPLE_MUSIC_HISTORY_NOGGY": "1" if args.include_noggy else "0",
+                                 "APPLE_MUSIC_HISTORY_ALL": "1" if args.all_playlists else "0",
                                  "APPLE_MUSIC_HISTORY_EXPORTER": str(exporter)},
         "StartCalendarInterval": {"Hour": args.hour, "Minute": args.minute},
         "LimitLoadToSessionType": "Aqua",

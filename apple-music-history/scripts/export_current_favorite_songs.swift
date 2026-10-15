@@ -10,12 +10,31 @@ func field(_ value: String) -> String {
 
 do {
     let arguments = Array(CommandLine.arguments.dropFirst())
-    guard arguments.isEmpty || (arguments.count == 2 && arguments[0] == "--playlist") else {
-        fputs("usage: export_current_favorite_songs [--playlist NAME]\n", stderr)
+    let all = arguments == ["--all-playlists"]
+    guard all || arguments.isEmpty || (arguments.count == 2 && arguments[0] == "--playlist") else {
+        fputs("usage: export_current_favorite_songs [--playlist NAME | --all-playlists]\n", stderr)
         exit(2)
     }
     let name = arguments.last ?? "Favorite Songs"
     let library = try ITLibrary(apiVersion: "1.1")
+    if all {
+        let playlists: [[String: Any]] = library.allPlaylists.map { playlist in
+            let items = playlist.items.map { item in
+                ["persistent_id": item.persistentID.stringValue, "title": item.title,
+                 "artist": item.artist?.name ?? "", "album": item.album.title ?? "",
+                 "url": item.location?.absoluteString ?? ""]
+            }
+            return ["persistent_id": playlist.persistentID.stringValue,
+                    "name": playlist.name, "parent_id": playlist.parentID?.stringValue as Any? ?? NSNull(),
+                    "kind": playlist.kind.rawValue, "distinguished_kind": playlist.distinguishedKind.rawValue,
+                    "visible": playlist.isVisible, "items": items]
+        }
+        let payload: [String: Any] = ["schema_version": 1, "complete": true, "playlists": playlists]
+        let data = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+        FileHandle.standardOutput.write(data)
+        fputs("# exported all \(playlists.count) playlists\n", stderr)
+        exit(0)
+    }
     let playlists = library.allPlaylists.filter {
         name == "Favorite Songs" ? $0.distinguishedKind.rawValue == 52 : $0.name == name
     }

@@ -6,10 +6,11 @@ playlist_repo=${APPLE_MUSIC_HISTORY_REPO:-$PWD}
 blank_policy=auto
 playlist_names=()
 push_after=no
+all_playlists=no
 
 usage() {
   cat <<'EOF'
-usage: capture_current_snapshot.zsh [--playlist-repo PATH] [--playlist NAME ...] [--blank=auto|always|never] [--push]
+usage: capture_current_snapshot.zsh [--playlist-repo PATH] [--all-playlists | --playlist NAME ...] [--blank=auto|always|never] [--push]
 
 Exports requested local Music.app playlists and commits them together in
 the playlist-history repo. Default: Favorite Songs. Repeat --playlist for more.
@@ -33,6 +34,10 @@ while (( $# )); do
       (( $# >= 2 )) || { usage >&2; exit 2; }
       playlist_names+=("$2")
       shift 2
+      ;;
+    --all-playlists)
+      all_playlists=yes
+      shift
       ;;
     --playlist-repo=*)
       playlist_repo=${1#*=}
@@ -70,6 +75,10 @@ case "$blank_policy" in
     ;;
 esac
 
+if [[ $all_playlists == yes && ${#playlist_names} -gt 0 ]]; then
+  echo "--all-playlists cannot be combined with --playlist" >&2
+  exit 2
+fi
 (( ${#playlist_names} )) || playlist_names=("Favorite Songs")
 typeset -A seen_names
 for name in "${playlist_names[@]}"; do
@@ -106,6 +115,15 @@ trap 'rm -rf "$temporary"' EXIT
 export_command=(swift "$script_dir/export_current_favorite_songs.swift")
 if [[ -n ${APPLE_MUSIC_HISTORY_EXPORTER:-} ]]; then
   export_command=("$APPLE_MUSIC_HISTORY_EXPORTER")
+fi
+if [[ $all_playlists == yes ]]; then
+  /usr/bin/perl -e 'alarm 120; exec {$ARGV[0]} @ARGV or die "exec failed: $!\n"' \
+    "${export_command[@]}" --all-playlists > "$temporary/playlists.json"
+  python3 "$script_dir/sync_all_playlists.py" "$temporary/playlists.json" "$playlist_repo" "$blank_policy"
+  if [[ "$push_after" == yes ]]; then
+    git -C "$playlist_repo" push
+  fi
+  exit 0
 fi
 playlist_files=()
 changed=no

@@ -1,5 +1,7 @@
 import os
 import fcntl
+import copy
+import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -39,6 +41,7 @@ class CaptureTests(unittest.TestCase):
         stub.write_text('''#!/bin/sh
 [ "${FAIL_EXPORT:-0}" = 0 ] || exit 1
 case "$*" in
+  *--all-playlists) cat "$FAKE_ALL_EXPORT" ;;
   *Noggy)
     [ "${FAIL_NOGGY:-0}" = 0 ] || exit 1
     cat "$FAKE_NOGGY_EXPORT"
@@ -52,6 +55,26 @@ esac
         self.env = {**os.environ, "PATH": f"{binaries}:{os.environ['PATH']}",
                     "FAKE_EXPORT": str(self.export), "TMPDIR": str(root),
                     "FAKE_NOGGY_EXPORT": str(self.noggy_export)}
+        self.all_export = root / "all.json"
+        self.env["FAKE_ALL_EXPORT"] = str(self.all_export)
+
+    def inventory(self):
+        item = dict(zip(("persistent_id", "title", "artist", "album", "url"),
+                        ("123", "Original", "Artist", "Album", "")))
+        def playlist(pid, name, items, kind=0, distinguished=0, parent=None):
+            return dict(persistent_id=pid, name=name, items=items, kind=kind,
+                        distinguished_kind=distinguished, parent_id=parent, visible=True)
+        return dict(schema_version=1, complete=True, playlists=[
+            playlist("1", "Favorite Songs", [item], distinguished=52),
+            playlist("2", "Noggy", [item, item]),
+            playlist("3", "same/name", [], parent="5"),
+            playlist("4", "same/name", [item]),
+            playlist("5", "Folder", [], kind=3),
+        ])
+
+    def export_all(self, payload=None, *args):
+        self.all_export.write_text(json.dumps(payload if payload is not None else self.inventory()))
+        return self.capture("--all-playlists", *args)
 
     def git(self, *args):
         return subprocess.check_output(["git", "-C", str(self.repo), *args],
@@ -184,6 +207,105 @@ esac
         remote_head = subprocess.check_output(["git", "--git-dir", str(remote),
                                                "rev-parse", "main"], text=True).strip()
         self.assertEqual(remote_head, self.git("rev-parse", "HEAD"))
+
+    def test_all_preserves_order_repeats_folders_and_duplicate_names(self):
+        payload = self.inventory()
+        other = dict(payload["playlists"][0]["items"][0], persistent_id="456", title="Next\tline\n\\")
+        payload["playlists"][1]["items"].insert(1, other)
+        result = self.export_all(payload)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        index = json.loads((self.repo / "playlists.json").read_text())
+        self.assertEqual(len(index["playlists"]), 5)
+        self.assertEqual((self.repo / "playlists/3.tsv").read_text(), HEADER)
+        self.assertEqual((self.repo / "playlists/5.tsv").read_text(), HEADER)
+        noggy = (self.repo / "Noggy.tsv").read_text().splitlines()
+        self.assertEqual([line.split("\t")[0] for line in noggy[1:]], ["123", "456", "123"])
+        self.assertIn("Next\\tline\\n\\\\", noggy[2])
+        self.assertEqual(self.git("rev-parse", "HEAD^"), self.before)
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_all_rename_keeps_identity_and_legacy_filename(self):
+        self.assertEqual(self.export_all().returncode, 0)
+        payload = self.inventory()
+        payload["playlists"][1]["name"] = "Renamed / Noggy"
+        payload["playlists"][3]["name"] = "Renamed"
+        result = self.export_all(payload)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        entries = json.loads((self.repo / "playlists.json").read_text())["playlists"]
+        self.assertEqual(entries[1]["file"], "Noggy.tsv")
+        self.assertEqual(entries[3]["file"], "playlists/4.tsv")
+        self.assertEqual(self.git("diff", "HEAD^", "HEAD", "--name-only"), "playlists.json")
+
+    def test_all_removals_only_remove_indexed_files(self):
+        self.assertEqual(self.export_all().returncode, 0)
+        unrelated = self.repo / "playlists/999.tsv"
+        unrelated.write_text("keep me\n")
+        self.git("add", ".")
+        self.git("cic", "-m", "Unrelated fixture")
+        payload = self.inventory()
+        payload["playlists"] = [p for p in payload["playlists"] if p["persistent_id"] != "4"]
+        result = self.export_all(payload)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((self.repo / "playlists/4.tsv").exists())
+        self.assertEqual(unrelated.read_text(), "keep me\n")
+        self.assertIn("Original", self.git("show", "HEAD^:playlists/4.tsv"))
+
+    def test_all_unchanged_blank_policy(self):
+        self.assertEqual(self.export_all().returncode, 0)
+        before = self.git("rev-parse", "HEAD")
+        self.assertEqual(self.export_all(None, "--blank=never").returncode, 0)
+        self.assertEqual(self.git("rev-parse", "HEAD"), before)
+        self.assertEqual(self.export_all(None, "--blank=always").returncode, 0)
+        self.assertEqual(self.git("rev-parse", "HEAD^"), before)
+        self.assertEqual(self.git("diff", "HEAD^", "HEAD", "--stat"), "")
+
+    def test_all_invalid_inventory_preserves_files(self):
+        original = self.inventory()
+        variants = []
+        for key, value in [("complete", False), ("playlists", [])]:
+            variants.append(dict(original, **{key: value}))
+        variants.append(dict(original, playlists=original["playlists"][1:]))
+        duplicate = copy.deepcopy(original)
+        duplicate["playlists"].append(duplicate["playlists"][0])
+        variants.append(duplicate)
+        invalid = copy.deepcopy(original)
+        invalid["playlists"][-1]["items"] = [{"persistent_id": "123"}]
+        variants.append(invalid)
+        empty = copy.deepcopy(original)
+        empty["playlists"][0]["items"] = []
+        variants.append(empty)
+        for payload in variants:
+            with self.subTest(payload=payload):
+                self.assertNotEqual(self.export_all(payload).returncode, 0)
+                self.assert_preserved()
+                self.assertFalse((self.repo / "playlists.json").exists())
+
+    def test_all_refuses_mixed_selection(self):
+        self.assertEqual(self.capture("--all-playlists", "--playlist", "Noggy").returncode, 2)
+        self.assert_preserved()
+
+    def test_all_refuses_unindexed_collision(self):
+        path = self.repo / "playlists/4.tsv"
+        path.parent.mkdir()
+        path.write_text("keep me\n")
+        self.git("add", ".")
+        self.git("cic", "-m", "Collision fixture")
+        before = self.git("rev-parse", "HEAD")
+        result = self.export_all()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.git("rev-parse", "HEAD"), before)
+        self.assertEqual(path.read_text(), "keep me\n")
+        self.assertFalse((self.repo / "playlists.json").exists())
+
+    def test_all_refuses_unsafe_previous_index(self):
+        (self.repo / "playlists.json").write_text(json.dumps(dict(schema_version=1,
+            playlists=[dict(persistent_id="4", file="../outside.tsv")])))
+        self.git("add", ".")
+        self.git("cic", "-m", "Unsafe fixture")
+        before = self.git("rev-parse", "HEAD")
+        self.assertNotEqual(self.export_all().returncode, 0)
+        self.assertEqual(self.git("rev-parse", "HEAD"), before)
+        self.assertEqual(self.target.read_text(), ORIGINAL)
 
 
 if __name__ == "__main__":
