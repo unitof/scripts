@@ -1,5 +1,15 @@
 # Playlist History Handoff
 
+## Current Scope: All Playlists
+
+- October 15, 2026: user explicitly approved daily public tracking of ALL playlist names, order/repeats, song metadata, IDs, and local file URLs in `unitof/apple-music-playlist-history`. This supersedes the earlier two-playlist limit below.
+- Install/rebuild with `python3 scripts/install_daily_agent.py --all-playlists --push`. Daily job and npm snapshot use `--all-playlists`; named-only modes remain supported for compatibility.
+- All-mode exports the API inventory once as JSON, validates everything, then commits TSVs plus playlists.json. IDs, not names, identify files; preserve the existing Favorite Songs.tsv/Noggy.tsv paths through the index. Names may repeat or contain slashes. Track empty playlists/folders too. Preserve order/repeats; smart playlist rules are not exposed.
+- Capture removals by deleting only previously indexed files, retaining Git history. Do not infer exact removal timestamps. Fail closed on invalid/truncated inventory or missing/empty built-in favorites, and never remove unrelated files.
+- Preflight: 133 playlists, 36,974 total entries; 122 regular, 9 smart, 2 folders, 8 empty. Duplicate names include All Lang Synes, Colson's Little Pim Pams, and MusicHarbor (Sneak Peek).
+
+## Prior Findings And Workflow
+
 - Scripts live here within the `~/repos/scripts` Git repository.
 - Data lives in a separate Git checkout at `~/repos/apple-music-playlist-history`, remote `git@github.com:unitof/apple-music-playlist-history.git`.
 - The Drive item named Apple Music Playlist History is a Finder alias. Do not pass it as `--playlist-repo`. Its target checkout was missing on October 11, 2026 and was restored from GitHub; do not assume unpushed history was recovered.

@@ -2,6 +2,38 @@
 
 Small utilities for preserving Apple Music playlist states as git history.
 
+## All-Playlist Tracking
+
+The installed daily job and data repo's `npm run snapshot` use `--all-playlists`.
+This captures every playlist exposed by the local iTunesLibrary API, including
+regular, smart, built-in/library playlists, and folders. Cloud-only playlists
+not exposed locally and smart-playlist rule definitions cannot be recovered by
+this API. Snapshot dates are observation times, not exact edit/deletion dates.
+
+`playlists.json` indexes playlist IDs, names, parent folder IDs, kind, visibility,
+entry counts, and TSV paths. Other playlists use `playlists/<persistent_id>.tsv`,
+so duplicate names, slashes, and renames are safe. Existing `Favorite Songs.tsv`
+and `Noggy.tsv` paths are retained for the same IDs after the initial migration.
+Empty playlists and folders have header-only TSVs; track order and repeats stay
+intact. Removed playlists disappear from the current index and files but remain
+recoverable in Git history. Only files listed in the prior index are removed.
+
+All JSON data is validated before changing any snapshot. A failed/invalid export,
+empty playlist inventory, or missing/empty built-in favorites refuses the update.
+Daily runs make one combined commit, including an empty commit if nothing changed.
+To install all-playlist daily capture and the approved public upload:
+
+```zsh
+python3 scripts/install_daily_agent.py --all-playlists --push
+```
+
+On October 15, 2026 the user explicitly approved daily public publication of ALL
+playlist names, order/repeats, song metadata, IDs, and local file URLs to
+`unitof/apple-music-playlist-history`. Preflight: 133 playlists, 36,974 entries
+(counting repeats and the same track in different playlists), including 8 empty.
+`--playlist NAME` remains available for the earlier named-only capture mode;
+the all-playlist flag cannot be combined with named selection.
+
 The data repository lives separately at `~/repos/apple-music-playlist-history`
 with remote `git@github.com:unitof/apple-music-playlist-history.git`.
 The following Drive location is a Finder alias, not a directory usable by shell scripts:
