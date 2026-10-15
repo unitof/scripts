@@ -48,6 +48,10 @@ The following Drive location is a Finder alias, not a directory usable by shell 
 - Historical commits use `GIT_AUTHOR_DATE` for the playlist state date.
 - Commit dates are the actual date the history repo was updated.
 - Use `git cic` for commits so the Codex co-author trailer is included.
+- Every new playlist snapshot commit (changed or unchanged, all or named mode)
+  also includes `Co-authored-by: music-library-archiver (https://github.com/unitof/scripts/tree/main/apple-music-history)`.
+  This links to the archiver's source without inventing a GitHub account/email;
+  existing history is not rewritten.
 
 ## Scripts
 

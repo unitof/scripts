@@ -9,6 +9,7 @@
 - Preflight: 133 playlists, 36,974 total entries; 122 regular, 9 smart, 2 folders, 8 empty. Duplicate names include All Lang Synes, Colson's Little Pim Pams, and MusicHarbor (Sneak Peek).
 - Verified all-playlist LaunchAgent October 15: exit 0, pushed snapshot `63f8030`, 133 playlists and 36,974 entries; 132 added files (131 additional playlists plus index), no removals, Favorite Songs/Noggy unchanged. All 24 tests passed. Schedule remains 10:00 local.
 - User requested renaming the installed exporter to `music-library-archiver`. Installer updates the plist path and removes the legacy `export-favorite-songs` binary only after loading the new job. Keep source filename and environment variable for compatibility.
+- Each new playlist snapshot commit must include `Co-authored-by: music-library-archiver (https://github.com/unitof/scripts/tree/main/apple-music-history)` in addition to the required Codex trailer. Apply to changed and unchanged snapshots in all/named modes; do not rewrite old history. Only shell/Python commit logic changes require no exporter rebuild or LaunchAgent reinstall.
 
 ## Prior Findings And Workflow
 
