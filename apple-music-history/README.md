@@ -19,11 +19,11 @@ The following Drive location is a Finder alias, not a directory usable by shell 
 
 ## Scripts
 
-- `scripts/export_current_favorite_songs.swift`: exports the current Apple built-in `Favorite Songs` playlist through `iTunesLibrary.framework`.
+- `scripts/export_current_favorite_songs.swift`: exports Favorite Songs (by distinguished kind 52), or a named playlist via `--playlist NAME`, through `iTunesLibrary.framework`. The filename is retained for compatibility.
 - `scripts/backblaze_musicdb_manifest.py`: parses local Backblaze `bz_done_*.dat` logs and creates weekly `Library.musicdb` restore manifests.
 - `scripts/march_csv_to_playlist_tsv.py`: converts the recovered March 6 parser CSV into the canonical playlist TSV.
 - `scripts/diff_playlist_states.py`: compares two canonical playlist TSV files by `persistent_id`.
-- `scripts/capture_current_snapshot.zsh`: exports the current local `Favorite Songs.tsv` and commits it in the playlist-history repo.
+- `scripts/capture_current_snapshot.zsh`: exports and validates requested playlists before updating and committing their individual TSV files. Repeat `--playlist NAME` to capture several in one commit; default is Favorite Songs only.
 
 ## Backblaze Credentials
 
@@ -73,7 +73,11 @@ Blank commit policy is controlled with `--blank=auto|always|never`.
 - `never` skips no-change captures.
 
 Capture commits locally; run `git push` in the data repository to sync GitHub.
-Only the built-in Favorite Songs playlist is currently captured.
+The daily job and the data repo's `npm run snapshot` capture Favorite Songs and
+Noggy. To capture both directly, append `--playlist "Favorite Songs" --playlist Noggy`.
+Every requested playlist must exist uniquely and be nonempty; if an export
+fails, no playlist file is updated. This intentionally refuses emptying/deletion
+until manually reviewed. Playlist names containing slashes are not supported.
 
 ## Daily Capture Without An LLM
 
@@ -92,11 +96,12 @@ compiles and ad-hoc signs the Swift exporter once under
 the daily job runs that binary without invoking the Swift compiler. Reinstall
 after changing exporter source or upgrading the toolchain/OS.
 
-The daily job exports Favorite Songs and commits changed states (or an unchanged
+The daily job exports Favorite Songs and Noggy into separate TSV files and commits changed states (or an unchanged
 state for each successful daily run). It captures locally by default. Install
 with `--push` only after approving uploads to the configured Git upstream:
 `unitof/apple-music-playlist-history` was PUBLIC when checked on October 14, 2026.
-The TSV includes song metadata, persistent IDs, and local file URLs.
+The TSVs include song metadata, persistent IDs, and local file URLs. The user
+approved public daily uploads and subsequently requested Noggy in the same workflow.
 It does not force an Apple cloud sync, change Music.app, or
 rewrite Git history. Keep Music's local library synced separately.
 
