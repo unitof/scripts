@@ -78,6 +78,9 @@ Noggy. To capture both directly, append `--playlist "Favorite Songs" --playlist 
 Every requested playlist must exist uniquely and be nonempty; if an export
 fails, no playlist file is updated. This intentionally refuses emptying/deletion
 until manually reviewed. Playlist names containing slashes are not supported.
+Named playlists may contain repeated tracks; order and occurrences are preserved.
+Only built-in Favorite Songs requires unique persistent IDs. The existing
+`diff_playlist_states.py` compares distinct IDs, not repeated occurrences.
 
 ## Daily Capture Without An LLM
 
