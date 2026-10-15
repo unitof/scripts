@@ -116,9 +116,13 @@ for name in "${playlist_names[@]}"; do
   /usr/bin/perl -e 'alarm 120; exec {$ARGV[0]} @ARGV or die "exec failed: $!\n"' \
     "${export_command[@]}" --playlist "$name" > "$tmp"
 
-  if ! awk -F '\t' '
+  unique_ids=no
+  if [[ $name == "Favorite Songs" ]]; then
+    unique_ids=yes
+  fi
+  if ! awk -F '\t' -v unique_ids="$unique_ids" '
   NR == 1 { if ($0 != "persistent_id\ttitle\tartist\talbum\turl") exit 1; next }
-  NF != 5 || $1 !~ /^[0-9]+$/ || seen[$1]++ { bad = 1 }
+  NF != 5 || $1 !~ /^[0-9]+$/ || (unique_ids == "yes" && seen[$1]++) { bad = 1 }
   END { if (NR < 2 || bad) exit 1 }
 ' "$tmp"; then
     echo "empty or malformed playlist export for $name; refusing to overwrite snapshots" >&2

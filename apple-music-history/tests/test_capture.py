@@ -106,6 +106,13 @@ esac
         self.assert_preserved()
         self.assertFalse((self.repo / "Noggy.tsv").exists())
 
+    def test_named_playlist_preserves_repeated_tracks(self):
+        repeated = CHANGED + CHANGED.splitlines(True)[1]
+        self.noggy_export.write_text(repeated)
+        result = self.capture("--playlist", "Favorite Songs", "--playlist", "Noggy")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.repo / "Noggy.tsv").read_text(), repeated)
+
     def test_second_invalid_export_preserves_all_snapshots(self):
         self.export.write_text(CHANGED)
         self.noggy_export.write_text(HEADER)
