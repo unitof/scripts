@@ -87,6 +87,11 @@ Install a per-user macOS LaunchAgent (default: 10:00 AM local time):
 python3 scripts/install_daily_agent.py
 ```
 
+Use `--include-noggy` to include Noggy in the scheduled job. For the existing
+public-upload workflow, use `--include-noggy --push` after explicitly approving
+publication of Noggy's metadata and local file URLs. Without this flag, the
+schedule continues to capture Favorite Songs only.
+
 Use `--hour 14 --minute 30` to choose a different time. This generates
 `~/Library/LaunchAgents/com.unitof.apple-music-history.plist` and loads it.
 The Mac must be logged in; missed runs during sleep are coalesced on wake.
