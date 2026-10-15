@@ -51,7 +51,8 @@ The following Drive location is a Finder alias, not a directory usable by shell 
 
 ## Scripts
 
-- `scripts/export_current_favorite_songs.swift`: exports Favorite Songs (by distinguished kind 52), or a named playlist via `--playlist NAME`, through `iTunesLibrary.framework`. The filename is retained for compatibility.
+- `scripts/export_current_favorite_songs.swift`: exports all playlists as JSON with `--all-playlists`, or Favorite Songs (by distinguished kind 52) / a named playlist as TSV, through `iTunesLibrary.framework`. The filename is retained for compatibility.
+- `scripts/sync_all_playlists.py`: validates the complete JSON inventory, maintains the ID-based index and files, and commits changes or an unchanged observation. Called under the capture wrapper's repository lock.
 - `scripts/backblaze_musicdb_manifest.py`: parses local Backblaze `bz_done_*.dat` logs and creates weekly `Library.musicdb` restore manifests.
 - `scripts/march_csv_to_playlist_tsv.py`: converts the recovered March 6 parser CSV into the canonical playlist TSV.
 - `scripts/diff_playlist_states.py`: compares two canonical playlist TSV files by `persistent_id`.
@@ -105,9 +106,9 @@ Blank commit policy is controlled with `--blank=auto|always|never`.
 - `never` skips no-change captures.
 
 Capture commits locally; run `git push` in the data repository to sync GitHub.
-The daily job and the data repo's `npm run snapshot` capture Favorite Songs and
-Noggy. To capture both directly, append `--playlist "Favorite Songs" --playlist Noggy`.
-Every requested playlist must exist uniquely and be nonempty; if an export
+The daily job and the data repo's `npm run snapshot` capture all playlists.
+For the older named-only mode, append `--playlist "Favorite Songs" --playlist Noggy`.
+In named-only mode, every requested playlist must exist uniquely and be nonempty; if an export
 fails, no playlist file is updated. This intentionally refuses emptying/deletion
 until manually reviewed. Playlist names containing slashes are not supported.
 Named playlists may contain repeated tracks; order and occurrences are preserved.
@@ -119,13 +120,13 @@ Only built-in Favorite Songs requires unique persistent IDs. The existing
 Install a per-user macOS LaunchAgent (default: 10:00 AM local time):
 
 ```zsh
-python3 scripts/install_daily_agent.py
+python3 scripts/install_daily_agent.py --all-playlists --push
 ```
 
-Use `--include-noggy` to include Noggy in the scheduled job. For the existing
-public-upload workflow, use `--include-noggy --push` after explicitly approving
-publication of Noggy's metadata and local file URLs. Without this flag, the
-schedule continues to capture Favorite Songs only.
+`--all-playlists` selects the approved complete inventory. The older
+`--include-noggy` selects only Favorite Songs and Noggy. Omitting both flags
+installs Favorite-only capture; reinstall with the full flags above to retain
+the current scope. Omitting `--push` disables public uploads.
 
 Use `--hour 14 --minute 30` to choose a different time. This generates
 `~/Library/LaunchAgents/com.unitof.apple-music-history.plist` and loads it.
@@ -136,17 +137,18 @@ compiles and ad-hoc signs the Swift exporter once under
 the daily job runs that binary without invoking the Swift compiler. Reinstall
 after changing exporter source or upgrading the toolchain/OS.
 
-The daily job exports Favorite Songs and Noggy into separate TSV files and commits changed states (or an unchanged
+The daily job exports all locally exposed playlists into separate TSV files and commits changed states (or an unchanged
 state for each successful daily run). It captures locally by default. Install
 with `--push` only after approving uploads to the configured Git upstream:
 `unitof/apple-music-playlist-history` was PUBLIC when checked on October 14, 2026.
 The TSVs include song metadata, persistent IDs, and local file URLs. The user
-approved public daily uploads and subsequently requested Noggy in the same workflow.
+approved public daily uploads of all playlists on October 15, 2026.
 It does not force an Apple cloud sync, change Music.app, or
 rewrite Git history. Keep Music's local library synced separately.
 
 It uses a repository lock, refuses dirty checkouts, times out exports after
-120 seconds, and rejects empty/malformed snapshots. Push failures leave local
+120 seconds, and rejects malformed exports, empty inventories, and missing/empty
+favorites (other empty playlists are valid in all-mode). Push failures leave local
 commits intact for the next run; remote divergence needs manual resolution.
 Git SSH runs noninteractively, so unattended access must already work. The
 existing `git cic` helper supplies commit trailers; it does not invoke an LLM.
@@ -182,4 +184,4 @@ launchctl after changes, and never infer success from loading the plist alone.
 - The live export path is supported by Apple's public `iTunesLibrary.framework`; no Music.app preference switching is needed.
 - The export preserves the order returned by `iTunesLibrary.framework`, matching the current committed playlist file.
 - If a future parser/exporter changes ordering, expect a noisy one-time diff unless the existing history is rewritten or normalized.
-- The playlist-history repo should remain mostly data: `Favorite Songs.tsv`, README, and a tiny command wrapper only.
+- The playlist-history repo should remain mostly data: playlist TSVs, `playlists.json`, README, and a tiny command wrapper only.
