@@ -7,6 +7,7 @@ blank_policy=auto
 playlist_names=()
 push_after=no
 all_playlists=no
+archiver_trailer='Co-authored-by: music-library-archiver (https://github.com/unitof/scripts/tree/main/apple-music-history)'
 
 usage() {
   cat <<'EOF'
@@ -160,7 +161,7 @@ if [[ "$changed" == yes ]]; then
     cp "$temporary/$playlist_file" "$playlist_repo/$playlist_file"
   done
   git -C "$playlist_repo" add -- "${playlist_files[@]}"
-  GIT_AUTHOR_DATE="$snapshot_date" git -C "$playlist_repo" cic -m "Record $label current state"
+  GIT_AUTHOR_DATE="$snapshot_date" git -C "$playlist_repo" cic -m "Record $label current state" --trailer "$archiver_trailer"
 else
   should_blank=no
   case "$blank_policy" in
@@ -180,7 +181,7 @@ else
   esac
 
   if [[ "$should_blank" == yes ]]; then
-    GIT_AUTHOR_DATE="$snapshot_date" git -C "$playlist_repo" cic --allow-empty -m "Record $label unchanged state"
+    GIT_AUTHOR_DATE="$snapshot_date" git -C "$playlist_repo" cic --allow-empty -m "Record $label unchanged state" --trailer "$archiver_trailer"
   else
     echo "No playlist changes detected; blank commit skipped (policy=$blank_policy)."
   fi

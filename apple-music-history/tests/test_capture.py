@@ -13,6 +13,7 @@ HEADER = "persistent_id\ttitle\tartist\talbum\turl\n"
 ORIGINAL = HEADER + "123\tOriginal\tArtist\tAlbum\t\n"
 CHANGED = HEADER + "456\tNew song\tArtist\tAlbum\t\n"
 TRAILER = "Co-authored-by: Codex (test fixture) <codex@openai.com>"
+ARCHIVER_TRAILER = "Co-authored-by: music-library-archiver (https://github.com/unitof/scripts/tree/main/apple-music-history)"
 
 
 class CaptureTests(unittest.TestCase):
@@ -88,14 +89,18 @@ esac
         self.assertEqual(self.target.read_text(), ORIGINAL)
         self.assertEqual(self.git("rev-parse", "HEAD"), self.before)
 
+    def assert_snapshot_attribution(self):
+        trailers = self.git("log", "-1", "--format=%(trailers:only)")
+        self.assertEqual(trailers.splitlines().count(ARCHIVER_TRAILER), 1)
+        self.assertRegex(trailers, r"Co-authored-by: Codex \([^\n]+\) <codex@openai.com>")
+
     def test_changed_export_committed(self):
         self.export.write_text(CHANGED)
         result = self.capture()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.target.read_text(), CHANGED)
         self.assertEqual(self.git("status", "--porcelain"), "")
-        self.assertRegex(self.git("log", "-1", "--format=%B"),
-                         r"Co-authored-by: Codex \([^\n]+\) <codex@openai.com>")
+        self.assert_snapshot_attribution()
 
     def test_unchanged_never(self):
         self.assertEqual(self.capture("--blank=never").returncode, 0)
@@ -112,6 +117,7 @@ esac
         self.assertEqual(self.capture("--blank=always").returncode, 0)
         self.assertNotEqual(self.git("rev-parse", "HEAD"), self.before)
         self.assertEqual(self.git("diff", "HEAD^", "HEAD", "--stat"), "")
+        self.assert_snapshot_attribution()
 
     def test_multiple_playlists_committed_together(self):
         self.export.write_text(CHANGED)
@@ -120,6 +126,7 @@ esac
         self.assertEqual(self.target.read_text(), CHANGED)
         self.assertEqual((self.repo / "Noggy.tsv").read_text(), CHANGED)
         self.assertEqual(self.git("rev-parse", "HEAD^"), self.before)
+        self.assert_snapshot_attribution()
 
     def test_second_export_failure_preserves_all_snapshots(self):
         self.export.write_text(CHANGED)
@@ -194,6 +201,7 @@ esac
         self.assertEqual(self.target.read_text(), CHANGED)
         self.assertNotEqual(self.git("rev-parse", "HEAD"), self.before)
         self.assertEqual(self.git("status", "--porcelain"), "")
+        self.assert_snapshot_attribution()
 
     def test_push_retries_pending_commit_without_change(self):
         remote = Path(self.temp.name) / "remote.git"
@@ -223,6 +231,7 @@ esac
         self.assertIn("Next\\tline\\n\\\\", noggy[2])
         self.assertEqual(self.git("rev-parse", "HEAD^"), self.before)
         self.assertEqual(self.git("status", "--porcelain"), "")
+        self.assert_snapshot_attribution()
 
     def test_all_rename_keeps_identity_and_legacy_filename(self):
         self.assertEqual(self.export_all().returncode, 0)
@@ -258,6 +267,7 @@ esac
         self.assertEqual(self.export_all(None, "--blank=always").returncode, 0)
         self.assertEqual(self.git("rev-parse", "HEAD^"), before)
         self.assertEqual(self.git("diff", "HEAD^", "HEAD", "--stat"), "")
+        self.assert_snapshot_attribution()
 
     def test_all_invalid_inventory_preserves_files(self):
         original = self.inventory()

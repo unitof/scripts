@@ -14,6 +14,7 @@ import time
 
 FIELDS = ("persistent_id", "title", "artist", "album", "url")
 INDEX = "playlists.json"
+ARCHIVER_TRAILER = "Co-authored-by: music-library-archiver (https://github.com/unitof/scripts/tree/main/apple-music-history)"
 
 
 def require(condition, message):
@@ -131,9 +132,9 @@ def main():
     env = {**os.environ, "GIT_AUTHOR_DATE": date}
     if changed or removed:
         git(repo, "add", "-A", "--", *sorted(changed | removed))
-        print(git(repo, "cic", "-m", "Record all playlists current state", env=env))
+        print(git(repo, "cic", "-m", "Record all playlists current state", "--trailer", ARCHIVER_TRAILER, env=env))
     elif blank_policy == "always" or (blank_policy == "auto" and time.time() - int(git(repo, "log", "-1", "--format=%ct")) > 86400):
-        print(git(repo, "cic", "--allow-empty", "-m", "Record all playlists unchanged state", env=env))
+        print(git(repo, "cic", "--allow-empty", "-m", "Record all playlists unchanged state", "--trailer", ARCHIVER_TRAILER, env=env))
     else:
         print("No playlist changes detected; blank commit skipped.")
     print(f"Captured {len(payload['playlists'])} playlists; changed files={len(changed)}; removed files={len(removed)}")
