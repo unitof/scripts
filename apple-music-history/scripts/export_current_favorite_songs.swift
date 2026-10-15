@@ -9,10 +9,18 @@ func field(_ value: String) -> String {
 }
 
 do {
+    let arguments = Array(CommandLine.arguments.dropFirst())
+    guard arguments.isEmpty || (arguments.count == 2 && arguments[0] == "--playlist") else {
+        fputs("usage: export_current_favorite_songs [--playlist NAME]\n", stderr)
+        exit(2)
+    }
+    let name = arguments.last ?? "Favorite Songs"
     let library = try ITLibrary(apiVersion: "1.1")
-    let playlists = library.allPlaylists.filter { $0.distinguishedKind.rawValue == 52 }
+    let playlists = library.allPlaylists.filter {
+        name == "Favorite Songs" ? $0.distinguishedKind.rawValue == 52 : $0.name == name
+    }
     guard playlists.count == 1, let playlist = playlists.first, !playlist.items.isEmpty else {
-        fputs("Expected one nonempty built-in Favorite Songs playlist; refusing export.\n", stderr)
+        fputs("Expected one nonempty playlist named \(name); refusing export.\n", stderr)
         exit(1)
     }
     print("persistent_id\ttitle\tartist\talbum\turl")

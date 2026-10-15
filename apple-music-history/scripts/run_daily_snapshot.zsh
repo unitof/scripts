@@ -11,8 +11,9 @@ if [[ ${APPLE_MUSIC_HISTORY_PUSH:-0} == 1 ]]; then
   push_args=(--push)
 fi
 
-echo "$(date -Iseconds) Starting Favorite Songs daily capture"
-if "$script_dir/capture_current_snapshot.zsh" --playlist-repo "$playlist_repo" --blank=always "${push_args[@]}"; then
+echo "$(date -Iseconds) Starting Favorite Songs and Noggy daily capture"
+if "$script_dir/capture_current_snapshot.zsh" --playlist-repo "$playlist_repo" \
+  --playlist "Favorite Songs" --playlist Noggy --blank=always "${push_args[@]}"; then
   echo "$(date -Iseconds) Capture succeeded (push=${APPLE_MUSIC_HISTORY_PUSH:-0})"
 else
   result=$?

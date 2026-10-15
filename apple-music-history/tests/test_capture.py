@@ -36,10 +36,22 @@ class CaptureTests(unittest.TestCase):
         binaries = root / "bin"
         binaries.mkdir()
         stub = binaries / "swift"
-        stub.write_text('#!/bin/sh\n[ "${FAIL_EXPORT:-0}" = 0 ] || exit 1\ncat "$FAKE_EXPORT"\n')
+        stub.write_text('''#!/bin/sh
+[ "${FAIL_EXPORT:-0}" = 0 ] || exit 1
+case "$*" in
+  *Noggy)
+    [ "${FAIL_NOGGY:-0}" = 0 ] || exit 1
+    cat "$FAKE_NOGGY_EXPORT"
+    ;;
+  *) cat "$FAKE_EXPORT" ;;
+esac
+''')
         stub.chmod(0o755)
+        self.noggy_export = root / "noggy.tsv"
+        self.noggy_export.write_text(CHANGED)
         self.env = {**os.environ, "PATH": f"{binaries}:{os.environ['PATH']}",
-                    "FAKE_EXPORT": str(self.export), "TMPDIR": str(root)}
+                    "FAKE_EXPORT": str(self.export), "TMPDIR": str(root),
+                    "FAKE_NOGGY_EXPORT": str(self.noggy_export)}
 
     def git(self, *args):
         return subprocess.check_output(["git", "-C", str(self.repo), *args],
@@ -77,6 +89,48 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(self.capture("--blank=always").returncode, 0)
         self.assertNotEqual(self.git("rev-parse", "HEAD"), self.before)
         self.assertEqual(self.git("diff", "HEAD^", "HEAD", "--stat"), "")
+
+    def test_multiple_playlists_committed_together(self):
+        self.export.write_text(CHANGED)
+        result = self.capture("--playlist", "Favorite Songs", "--playlist", "Noggy")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.target.read_text(), CHANGED)
+        self.assertEqual((self.repo / "Noggy.tsv").read_text(), CHANGED)
+        self.assertEqual(self.git("rev-parse", "HEAD^"), self.before)
+
+    def test_second_export_failure_preserves_all_snapshots(self):
+        self.export.write_text(CHANGED)
+        self.env["FAIL_NOGGY"] = "1"
+        result = self.capture("--playlist", "Favorite Songs", "--playlist", "Noggy")
+        self.assertNotEqual(result.returncode, 0)
+        self.assert_preserved()
+        self.assertFalse((self.repo / "Noggy.tsv").exists())
+
+    def test_second_invalid_export_preserves_all_snapshots(self):
+        self.export.write_text(CHANGED)
+        self.noggy_export.write_text(HEADER)
+        result = self.capture("--playlist", "Favorite Songs", "--playlist", "Noggy")
+        self.assertNotEqual(result.returncode, 0)
+        self.assert_preserved()
+        self.assertFalse((self.repo / "Noggy.tsv").exists())
+
+    def test_multiple_unchanged_one_empty_commit(self):
+        (self.repo / "Noggy.tsv").write_text(CHANGED)
+        self.git("add", "Noggy.tsv")
+        self.git("cic", "-m", "Noggy fixture")
+        before = self.git("rev-parse", "HEAD")
+        result = self.capture("--playlist", "Favorite Songs", "--playlist", "Noggy", "--blank=always")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.git("rev-parse", "HEAD^"), before)
+        self.assertEqual(self.git("diff", "HEAD^", "HEAD", "--stat"), "")
+
+    def test_invalid_playlist_arguments(self):
+        for arguments in [("--playlist",), ("--playlist", "../escape"),
+                          ("--playlist", "Noggy", "--playlist", "Noggy"),
+                          ("--playlist", "")]:
+            with self.subTest(arguments=arguments):
+                self.assertEqual(self.capture(*arguments).returncode, 2)
+                self.assert_preserved()
 
     def test_dirty_checkout_refused(self):
         (self.repo / "unrelated.txt").write_text("keep")
