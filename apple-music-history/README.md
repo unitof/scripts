@@ -133,9 +133,11 @@ Use `--hour 14 --minute 30` to choose a different time. This generates
 The Mac must be logged in; missed runs during sleep are coalesced on wake.
 No Codex automation, model invocation, or API key is involved. The installer
 compiles and ad-hoc signs the Swift exporter once under
-`~/Library/Application Support/apple-music-history/export-favorite-songs`;
+`~/Library/Application Support/apple-music-history/music-library-archiver`;
 the daily job runs that binary without invoking the Swift compiler. Reinstall
 after changing exporter source or upgrading the toolchain/OS.
+Reinstalling also updates the LaunchAgent's executable path and removes the old
+`export-favorite-songs` binary after the new job is loaded successfully.
 
 The daily job exports all locally exposed playlists into separate TSV files and commits changed states (or an unchanged
 state for each successful daily run). It captures locally by default. Install
